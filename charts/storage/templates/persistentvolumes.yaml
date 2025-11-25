@@ -1,0 +1,43 @@
+{{- if .Values.sharedStorage.enabled }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ .Values.sharedStorage.name }}
+  labels:
+    type: shared-data
+spec:
+  capacity:
+    storage: {{ .Values.sharedStorage.size }}
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  hostPath:
+    path: {{ .Values.sharedStorage.path }}
+    type: DirectoryOrCreate
+---
+{{- end }}
+{{- range .Values.persistentVolumes }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ .name }}
+spec:
+  capacity:
+    storage: {{ .size }}
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: {{ $.Values.storageClass.name }}
+  local:
+    path: {{ .path }}
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - {{ .nodeAffinity }}
+---
+{{- end }}

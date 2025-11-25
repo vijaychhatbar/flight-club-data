@@ -1,0 +1,247 @@
+version: '3'
+
+vars:
+  NAMESPACE: kafka
+  NVME_PATH: /mnt/nvme
+  KAFKA_REPLICAS: 3
+  KAFKA_VERSION: 7.5.0
+  HELMFILE: ./Helmfile.yaml
+  PRODUCER_IMAGE: opensky-producer:latest
+  CONSUMER_IMAGE: iceberg-consumer:latest
+  DAGSTER_IMAGE: dagster-aviation:latest
+  METABASE_IMAGE: metabase-duckdb:latest
+
+tasks:
+  # UV ENVIRONMENT MANAGEMENT
+  uv-install:
+    desc: Install uv package manager
+    cmds:
+      - |
+        if ! command -v uv &> /dev/null; then
+          echo "Installing uv"
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "uv installed successfully"
+        else
+          echo "uv already installed ($(uv --version))"
+        fi
+
+  venv-create:
+    desc: Create virtual environment with uv
+    cmds:
+      - |
+        echo "Creating virtual environment with uv"
+        uv venv .venv --python 3.11
+        echo "Virtual environment created at .venv"
+
+  venv-sync:
+    desc: Sync all dependencies using uv
+    deps: [venv-create]
+    cmds:
+      - |
+        echo "Installing all dependencies with uv"
+        source .venv/bin/activate
+        uv pip install -r requirements-producer.txt
+        uv pip install -r requirements-consumer.txt
+        uv pip install -r requirements-dagster.txt
+        uv pip install ruff black
+        echo "All dependencies synced"
+
+  venv-clean:
+    desc: Remove virtual environment
+    cmds:
+      - |
+        if [ -d ".venv" ]; then
+          echo "Removing virtual environment"
+          rm -rf .venv
+          echo "Virtual environment removed"
+        else
+          echo "No virtual environment found"
+        fi
+
+  # INFRASTRUCTURE SETUP
+  start-minikube:
+    desc: Start Minikube with NVME mount
+    cmds:
+      - |
+        minikube start \
+          --cpus=4 \
+          --memory=24576 \
+          --disk-size=100g \
+          --mount \
+          --mount-string="{{.NVME_PATH}}:{{.NVME_PATH}}"
+    status:
+      - minikube status | grep -q "Running"
+
+  prepare-nvme:
+    desc: Create and prepare NVME directories
+    cmds:
+      - |
+        minikube ssh "sudo mkdir -p \
+          {{.NVME_PATH}}/kafka-0 \
+          {{.NVME_PATH}}/kafka-1 \
+          {{.NVME_PATH}}/kafka-2 \
+          {{.NVME_PATH}}/shared-data \
+          {{.NVME_PATH}}/metabase \
+          {{.NVME_PATH}}/metabase-plugins \
+          {{.NVME_PATH}}/dagster-home \
+          {{.NVME_PATH}}/dagster-postgres && \
+          sudo chmod -R 777 {{.NVME_PATH}}/{kafka-*,shared-data,metabase*,dagster*}"
+
+  # HELMFILE DEPLOYMENT
+  helmfile-sync:
+    desc: Deploy all releases using Helmfile
+    cmds:
+      - |
+        if [ ! -f .env ]; then
+          echo "Error: .env file not found"
+          echo "Please copy .env.example to .env and update with your credentials"
+          exit 1
+        fi
+        export $(cat .env | grep -v '^#' | xargs)
+        echo "Deploying infrastructure with Helmfile"
+        helmfile -f {{.HELMFILE}} sync
+        echo "All releases deployed"
+
+  helmfile-destroy:
+    desc: Delete all Helm releases
+    cmds:
+      - |
+        if [ ! -f .env ]; then
+          echo "Error: .env file not found"
+          exit 1
+        fi
+        export $(cat .env | grep -v '^#' | xargs)
+        echo "Destroying all releases"
+        helmfile -f {{.HELMFILE}} destroy
+        echo "All releases deleted"
+
+  # DOCKER IMAGES BUILD
+  build-all-images:
+    desc: Build all Docker images for minikube
+    cmds:
+      - task: build-producer
+      - task: build-consumer
+      - task: build-dagster
+      - task: build-metabase
+      - echo "All images built"
+
+  build-producer:
+    desc: Build producer Docker image
+    cmds:
+      - |
+        eval $(minikube docker-env)
+        docker build -t {{.PRODUCER_IMAGE}} -f Dockerfile.producer . --no-cache
+
+  build-consumer:
+    desc: Build consumer Docker image
+    cmds:
+      - |
+        eval $(minikube docker-env)
+        docker build -t {{.CONSUMER_IMAGE}} -f Dockerfile.consumer . --no-cache
+
+  build-dagster:
+    desc: Build Dagster Docker image
+    cmds:
+      - |
+        eval $(minikube docker-env)
+        docker build -t {{.DAGSTER_IMAGE}} -f Dockerfile.dagster . --no-cache
+
+  build-metabase:
+    desc: Build Metabase Docker image
+    cmds:
+      - |
+        eval $(minikube docker-env)
+        docker build -t {{.METABASE_IMAGE}} -f Dockerfile.metabase . --no-cache
+
+  # STATUS
+  status:
+    desc: Show deployment status across all namespaces
+    cmds:
+      - |
+        echo "=== KAFKA NAMESPACE ==="
+        kubectl get pods,svc,pvc -n {{.NAMESPACE}}
+        echo ""
+        echo "=== DAGSTER NAMESPACE ==="
+        kubectl get pods,svc,pvc -n dagster
+        echo ""
+        echo "=== DASHBOARD NAMESPACE ==="
+        kubectl get pods,svc,pvc -n dashboard
+
+  # CLEANUP
+  clean-docker-images:
+    desc: Remove Docker images from Minikube
+    cmds:
+      - |
+        eval $(minikube docker-env)
+        echo "Removing Docker images"
+        docker rmi {{.PRODUCER_IMAGE}} 2>/dev/null || true
+        docker rmi {{.CONSUMER_IMAGE}} 2>/dev/null || true
+        docker rmi {{.DAGSTER_IMAGE}} 2>/dev/null || true
+        docker rmi {{.METABASE_IMAGE}} 2>/dev/null || true
+        echo "Docker images cleaned"
+
+  clean-nvme:
+    desc: Clean NVME data
+    cmds:
+      - |
+        minikube ssh "sudo rm -rf {{.NVME_PATH}}/* && sudo mkdir -p {{.NVME_PATH}}"
+        echo "NVME cleaned"
+
+  clean-pvc-pv:
+    desc: Delete all PersistentVolumeClaims and PersistentVolumes
+    cmds:
+      - |
+        echo "Deleting all PVCs and PVs"
+        kubectl delete pvc --all -A 2>/dev/null || true
+        kubectl delete pv --all 2>/dev/null || true
+        echo "PVCs and PVs deleted"
+
+  clean:
+    desc: Clean Helmfile releases and data (Helm, PVCs, PVs, NVME)
+    cmds:
+      - task: helmfile-destroy
+      - task: clean-pvc-pv
+      - task: clean-nvme
+
+  # MAIN TASKS
+  port-forward-dagster:
+    desc: Port forward Dagster (localhost:3000)
+    cmds:
+      - |
+        echo "Forwarding Dagster on localhost:3000"
+        kubectl port-forward -n dagster svc/dagster-webserver 3000:3000 &
+
+  port-forward-metabase:
+    desc: Port forward Metabase (localhost:3001)
+    cmds:
+      - |
+        echo "Forwarding Metabase on localhost:3001"
+        kubectl port-forward -n dashboard svc/metabase 3001:3000 &
+
+  deploy:
+    desc: Full end-to-end deployment with Helmfile
+    deps: [uv-install]
+    cmds:
+      - task: start-minikube
+      - task: prepare-nvme
+      - task: build-all-images
+      - task: helmfile-sync
+      - task: status
+      - |
+        echo ""
+        echo "Complete deployment successful"
+        echo ""
+        echo "Access points:"
+        echo "  Kafka: kafka-0.kafka.kafka.svc.cluster.local:9092"
+        echo "  Schema Registry: http://schema-registry-svc.kafka.svc.cluster.local:8081"
+        echo "  Dagster UI: $(minikube service dagster-webserver -n dagster --url)"
+        echo "  Metabase: $(minikube service metabase -n dashboard --url)"
+
+  destroy:
+    desc: Destroy everything and stop Minikube
+    cmds:
+      - task: clean
+      - task: clean-docker-images
+      - task: venv-clean
+      - minikube stop
+      - echo "Everything destroyed"

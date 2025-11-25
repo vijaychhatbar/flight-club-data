@@ -1,0 +1,97 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dagster-workspace
+  namespace: {{ .Release.Namespace }}
+data:
+  workspace.yaml: |
+    load_from:
+      - grpc_server:
+          host: dagster-code-server
+          port: 4000
+          location_name: "aviation_pipeline"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dagster-daemon
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: dagster-daemon
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dagster-daemon
+  template:
+    metadata:
+      labels:
+        app: dagster-daemon
+    spec:
+      initContainers:
+      - name: wait-for-postgres
+        image: busybox:1.36
+        command:
+        - sh
+        - -c
+        - |
+          echo "Waiting for PostgreSQL"
+          until nc -z postgres 5432; do
+            echo "Waiting"
+            sleep 2
+          done
+          echo "PostgreSQL is ready!"
+      - name: init-dagster-home
+        image: busybox:1.36
+        command:
+        - sh
+        - -c
+        - |
+          mkdir -p /opt/dagster/dagster_home/storage
+          mkdir -p /opt/dagster/dagster_home/logs
+          chmod -R 777 /opt/dagster/dagster_home
+        volumeMounts:
+        - name: dagster-home
+          mountPath: /opt/dagster/dagster_home
+        - name: shared-data
+          mountPath: /data
+      containers:
+      - name: daemon
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        command: ["dagster-daemon", "run", "-w", "/opt/dagster/dagster_home/workspace.yaml"]
+        envFrom:
+        - configMapRef:
+            name: dagster-config
+        env:
+        - name: DAGSTER_POSTGRES_HOST
+          value: "postgres"
+        - name: DAGSTER_POSTGRES_DB
+          value: "{{ .Values.postgres.database }}"
+        - name: DAGSTER_POSTGRES_USER
+          value: "{{ .Values.postgres.user }}"
+        - name: DAGSTER_POSTGRES_PASSWORD
+          value: "{{ .Values.postgres.password }}"
+        volumeMounts:
+        - name: dagster-home
+          mountPath: /opt/dagster/dagster_home
+        - name: shared-data
+          mountPath: /data
+        - name: workspace-config
+          mountPath: /opt/dagster/dagster_home/workspace.yaml
+          subPath: workspace.yaml
+        {{- with .Values.resources.daemon }}
+        resources:
+          {{- toYaml . | nindent 12 }}
+        {{- end }}
+      volumes:
+      - name: dagster-home
+        persistentVolumeClaim:
+          claimName: dagster-home
+      - name: shared-data
+        hostPath:
+          path: /mnt/nvme/shared-data
+          type: Directory
+      - name: workspace-config
+        configMap:
+          name: dagster-workspace

@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: kafka
+spec:
+  serviceName: kafka
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      containers:
+        - name: kafka
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 9092
+              name: client
+            - containerPort: 9093
+              name: controller
+          env:
+            {{- range $key, $value := .Values.brokerConfig }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          command:
+            - bash
+            - -c
+            - |
+              export POD_NAME=$(hostname)
+              export KAFKA_NODE_ID=${POD_NAME##*-}
+              export KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://${POD_NAME}.kafka.kafka.svc.cluster.local:9092
+
+              if [ ! -f /var/lib/kafka/data/meta.properties ]; then
+                /usr/bin/kafka-storage format \
+                  -t {{ .Values.brokerConfig.CLUSTER_ID }} \
+                  -c /etc/kafka/kafka.properties \
+                  --ignore-formatted
+              fi
+
+              exec /etc/confluent/docker/run
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/kafka/data
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: {{ .Values.storage.storageClass }}
+        resources:
+          requests:
+            storage: {{ .Values.storage.size }}

@@ -1,0 +1,22 @@
+replicaCount: 1
+
+image:
+  repository: confluentinc/cp-schema-registry
+  pullPolicy: IfNotPresent
+  tag: "7.5.0"
+
+kafkaBootstrapServers: "kafka-0.kafka.kafka.svc.cluster.local:9092,kafka-1.kafka.kafka.svc.cluster.local:9092,kafka-2.kafka.kafka.svc.cluster.local:9092"
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 500m
+    memory: 512Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

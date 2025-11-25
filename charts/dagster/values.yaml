@@ -1,0 +1,59 @@
+replicaCount: 1
+
+image:
+  repository: dagster-aviation
+  pullPolicy: IfNotPresent
+  tag: latest
+
+postgres:
+  enabled: true
+  image:
+    repository: postgres
+    tag: "15-alpine"
+  database: "dagster"
+  user: "dagster"
+  password: "dagster_password"  # Override via Helmfile with env vars
+  storage:
+    size: 5Gi
+    storageClass: local-nvme
+
+# Use shared PVC for all data.
+sharedPVC:
+  enabled: true
+  name: shared-data-pvc
+
+config:
+  DAGSTER_HOME: "/opt/dagster/dagster_home"
+  ICEBERG_CATALOG_PATH: "/data/shared/iceberg-warehouse"
+  ICEBERG_NAMESPACE: "aviation"
+  DUCKDB_PATH: "/data/shared/analytics/aviation.duckdb"
+  LOG_LEVEL: "INFO"
+
+resources:
+  daemon:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+  webserver:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+  codeServer:
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 1Gi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

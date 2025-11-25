@@ -1,0 +1,7 @@
+confluent-kafka[avro,schema-registry]==2.3.0
+pyiceberg[duckdb,sql-sqlite]==0.6.1
+pyarrow==14.0.1
+duckdb==0.9.2
+pandas==2.1.4
+python-dotenv==1.0.0
+colorlog==6.8.0

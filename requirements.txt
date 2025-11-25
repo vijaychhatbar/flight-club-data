@@ -1,0 +1,23 @@
+# HTTP client for OpenSky API
+requests==2.31.0
+
+# Kafka clients with Schema Registry support
+confluent-kafka[avro]==2.3.0
+confluent-kafka[schema-registry]==2.3.0
+
+# Apache Iceberg with DuckDB and SQLite support
+pyiceberg[duckdb,sql-sqlite]==0.6.1
+pyarrow==14.0.1
+
+# DuckDB and SQLAlchemy dialect
+duckdb==0.9.2
+duckdb-engine==0.10.0
+
+# Data handling
+pandas==2.1.4
+
+# Configuration
+python-dotenv==1.0.0
+
+# Logging
+colorlog==6.8.0

@@ -1,0 +1,9 @@
+dagster==1.5.12
+dagster-webserver==1.5.12
+dagster-postgres==0.21.12
+dagster-duckdb==0.21.12
+duckdb==0.9.2
+pyiceberg[duckdb,sql-sqlite]==0.6.1
+pyarrow==14.0.1
+pandas==2.1.4
+python-dotenv==1.0.0

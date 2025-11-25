@@ -1,0 +1,287 @@
+# Helmfile for our project.
+# Orchestrates all releases across multiple namespaces.
+# This is the driver helmfile for deploying the entire stack. It takes care of dependencies and order.
+
+helmDefaults:
+  atomic: true
+  cleanupOnFail: true
+  timeout: 600
+  wait: true
+
+# Release repositories
+repositories:
+  - name: confluentinc
+    url: https://packages.confluent.io/helm
+  - name: bitnami
+    url: https://charts.bitnami.com/bitnami
+
+# Global defaults
+commonLabels:
+  managed-by: helmfile
+  environment: development
+
+# All releases.
+releases:
+  # INFRASTRUCTURE: Storage & Namespaces.
+  - name: namespaces
+    namespace: kube-system
+    chart: ./charts/infrastructure
+    version: 1.0.0
+
+  - name: storage
+    namespace: kube-system
+    chart: ./charts/storage
+    version: 1.0.0
+    needs:
+      - kube-system/namespaces
+    values:
+      - storageClass:
+          name: local-nvme
+          provisioner: kubernetes.io/no-provisioner
+          volumeBindingMode: WaitForFirstConsumer
+        sharedStorage:
+          enabled: false
+        persistentVolumes:
+          - name: kafka-pv-0
+            size: 10Gi
+            path: /mnt/nvme/kafka-0
+            nodeAffinity: minikube
+          - name: kafka-pv-1
+            size: 10Gi
+            path: /mnt/nvme/kafka-1
+            nodeAffinity: minikube
+          - name: kafka-pv-2
+            size: 10Gi
+            path: /mnt/nvme/kafka-2
+            nodeAffinity: minikube
+          - name: metabase-pv
+            size: 5Gi
+            path: /mnt/nvme/metabase
+            nodeAffinity: minikube
+          - name: metabase-plugins-pv
+            size: 2Gi
+            path: /mnt/nvme/metabase-plugins
+            nodeAffinity: minikube
+          - name: dagster-home-pv
+            size: 10Gi
+            path: /mnt/nvme/dagster-home
+            nodeAffinity: minikube
+          - name: dagster-postgres-pv
+            size: 5Gi
+            path: /mnt/nvme/dagster-postgres
+            nodeAffinity: minikube
+
+  # DATA STREAMING: Kafka & Schema Registry.
+  - name: kafka
+    namespace: kafka
+    chart: ./charts/kafka
+    version: 1.0.0
+    needs:
+      - kube-system/storage
+    values:
+      - replicaCount: 3
+        image:
+          repository: confluentinc/cp-kafka
+          tag: "7.5.0"
+        brokerConfig:
+          KAFKA_PROCESS_ROLES: "broker,controller"
+          KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
+          KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+          KAFKA_LOG_DIRS: "/var/lib/kafka/data"
+          CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+        storage:
+          storageClass: local-nvme
+          size: 10Gi
+        resources:
+          limits:
+            cpu: 2000m
+            memory: 2Gi
+          requests:
+            cpu: 1000m
+            memory: 1Gi
+
+  - name: schema-registry
+    namespace: kafka
+    chart: ./charts/schema-registry
+    version: 1.0.0
+    needs:
+      - kafka/kafka
+    values:
+      - replicaCount: 1
+        image:
+          repository: confluentinc/cp-schema-registry
+          tag: "7.5.0"
+        kafkaBootstrapServers: "kafka-0.kafka.kafka.svc.cluster.local:9092,kafka-1.kafka.kafka.svc.cluster.local:9092,kafka-2.kafka.kafka.svc.cluster.local:9092"
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+          requests:
+            cpu: 500m
+            memory: 512Mi
+
+  # PIPELINE: Producer & Consumer.
+
+  - name: producer
+    namespace: kafka
+    chart: ./charts/producer
+    version: 1.0.0
+    needs:
+      - kafka/kafka
+      - kafka/schema-registry
+    values:
+      - replicaCount: 1
+        image:
+          repository: opensky-producer
+          tag: latest
+          pullPolicy: IfNotPresent
+        resources:
+          limits:
+            cpu: 2000m
+            memory: 2Gi
+          requests:
+            cpu: 500m
+            memory: 1Gi
+        config:
+          KAFKA_BOOTSTRAP_SERVERS: "kafka-0.kafka.kafka.svc.cluster.local:9092,kafka-1.kafka.kafka.svc.cluster.local:9092,kafka-2.kafka.kafka.svc.cluster.local:9092"
+          KAFKA_TOPIC: "flight-data"
+          SCHEMA_REGISTRY_URL: "http://schema-registry-svc:8081"
+          OPENSKY_API_URL: "https://opensky-network.org/api/states/all"
+          FETCH_INTERVAL_SECONDS: "300"
+          LOG_LEVEL: "INFO"
+        secrets:
+          OPENSKY_CLIENT_ID: {{ env "OPENSKY_CLIENT_ID" | quote }}
+          OPENSKY_CLIENT_SECRET: {{ env "OPENSKY_CLIENT_SECRET" | quote }}
+
+  - name: consumer
+    namespace: kafka
+    chart: ./charts/consumer
+    version: 1.0.0
+    needs:
+      - kafka/kafka
+      - kafka/schema-registry
+      - kube-system/storage
+    values:
+      - replicaCount: 1
+        image:
+          repository: iceberg-consumer
+          tag: latest
+          pullPolicy: IfNotPresent
+        resources:
+          limits:
+            cpu: 2000m
+            memory: 2Gi
+          requests:
+            cpu: 500m
+            memory: 1Gi
+        config:
+          KAFKA_BOOTSTRAP_SERVERS: "kafka-0.kafka.kafka.svc.cluster.local:9092,kafka-1.kafka.kafka.svc.cluster.local:9092,kafka-2.kafka.kafka.svc.cluster.local:9092"
+          KAFKA_TOPIC: "flight-data"
+          SCHEMA_REGISTRY_URL: "http://schema-registry-svc:8081"
+          CONSUMER_GROUP_ID: "iceberg-consumer-group"
+          BATCH_SIZE: "1000"
+          BATCH_TIMEOUT_SECONDS: "300"
+          ICEBERG_CATALOG_PATH: "/data/shared/iceberg-warehouse"
+          ICEBERG_NAMESPACE: "aviation"
+          ICEBERG_TABLE: "flight_data"
+          LOG_LEVEL: "INFO"
+        sharedPVC:
+          enabled: true
+          name: shared-data-pvc
+
+  # ANALYTICS: Dagster Pipeline Orchestration.
+
+  - name: dagster
+    namespace: dagster
+    chart: ./charts/dagster
+    version: 1.0.0
+    needs:
+      - kafka/consumer
+      - kube-system/storage
+    values:
+      - replicaCount: 1
+        image:
+          repository: dagster-aviation
+          tag: latest
+          pullPolicy: IfNotPresent
+        postgres:
+          enabled: true
+          image:
+            repository: postgres
+            tag: "15-alpine"
+          database: {{ env "DAGSTER_POSTGRES_DB" | quote }}
+          user: {{ env "DAGSTER_POSTGRES_USER" | quote }}
+          password: {{ env "DAGSTER_POSTGRES_PASSWORD" | quote }}
+          storage:
+            size: 5Gi
+            storageClass: local-nvme
+        sharedPVC:
+          enabled: true
+          name: shared-data-pvc
+        config:
+          DAGSTER_HOME: "/opt/dagster/dagster_home"
+          ICEBERG_CATALOG_PATH: "/data/shared/iceberg-warehouse"
+          ICEBERG_NAMESPACE: "aviation"
+          DUCKDB_PATH: "/data/shared/analytics/aviation.duckdb"
+          LOG_LEVEL: "INFO"
+        resources:
+          daemon:
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+            requests:
+              cpu: 250m
+              memory: 512Mi
+          webserver:
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+            requests:
+              cpu: 250m
+              memory: 512Mi
+          codeServer:
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+            requests:
+              cpu: 500m
+              memory: 1Gi
+
+  # VISUALIZATION: Metabase Dashboard.
+
+  - name: metabase
+    namespace: dashboard
+    chart: ./charts/metabase
+    version: 1.0.0
+    needs:
+      - dagster/dagster
+      - kube-system/storage
+    values:
+      - replicaCount: 1
+        image:
+          repository: metabase-duckdb
+          tag: latest
+          pullPolicy: IfNotPresent
+        metabaseData:
+          size: 5Gi
+          storageClass: local-nvme
+        metabasePlugins:
+          size: 2Gi
+          storageClass: local-nvme
+        sharedPVC:
+          enabled: true
+          name: shared-data-pvc
+        resources:
+          limits:
+            cpu: 2000m
+            memory: 2Gi
+          requests:
+            cpu: 500m
+            memory: 1Gi
+        securityContext:
+          fsGroup: 2000
+          runAsUser: 2000
+          runAsGroup: 2000
+        duckdbDriver:
+          enabled: true
+          version: "0.2.4"

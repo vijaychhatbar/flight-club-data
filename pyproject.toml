@@ -1,0 +1,57 @@
+[project]
+name = "flight-club-kafka"
+version = "0.1.0"
+description = "Real-time aviation data pipeline with Kafka, Iceberg, and Dagster"
+requires-python = ">=3.11"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.optional-dependencies]
+# Producer dependencies
+producer = [
+    "requests>=2.31.0",
+    "confluent-kafka[avro,schema-registry]>=2.3.0",
+    "python-dotenv>=1.0.0",
+    "colorlog>=6.8.0",
+]
+
+# Consumer dependencies
+consumer = [
+    "confluent-kafka[avro,schema-registry]>=2.3.0",
+    "pyiceberg[duckdb,sql-sqlite]>=0.6.1",
+    "pyarrow>=14.0.1",
+    "duckdb>=0.9.2",
+    "pandas>=2.1.4",
+    "python-dotenv>=1.0.0",
+    "colorlog>=6.8.0",
+]
+
+# Dagster dependencies
+dagster = [
+    "dagster>=1.5.12",
+    "dagster-webserver>=1.5.12",
+    "dagster-postgres>=0.21.12",
+    "dagster-duckdb>=0.21.12",
+    "duckdb>=0.9.2",
+    "pyiceberg[duckdb,sql-sqlite]>=0.6.1",
+    "pyarrow>=14.0.1",
+    "pandas>=2.1.4",
+    "python-dotenv>=1.0.0",
+]
+
+# Development dependencies
+dev = [
+    "ruff>=0.1.0",
+    "black>=23.0.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.black]
+line-length = 100
+target-version = ['py311']

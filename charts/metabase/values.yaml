@@ -1,0 +1,42 @@
+replicaCount: 1
+
+image:
+  repository: metabase-duckdb
+  pullPolicy: IfNotPresent
+  tag: latest
+
+metabaseData:
+  size: 5Gi
+  storageClass: local-nvme
+
+metabasePlugins:
+  size: 2Gi
+  storageClass: local-nvme
+
+# Use shared PVC for analytics data
+sharedPVC:
+  enabled: true
+  name: shared-data-pvc
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+  requests:
+    cpu: 500m
+    memory: 1Gi
+
+securityContext:
+  fsGroup: 2000
+  runAsUser: 2000
+  runAsGroup: 2000
+
+duckdbDriver:
+  enabled: true
+  version: "0.2.4"
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

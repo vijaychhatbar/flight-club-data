@@ -1,0 +1,10 @@
+apiVersion: v2
+name: iceberg-consumer
+description: Iceberg-backed Kafka consumer for flight data
+type: application
+version: 1.0.0
+appVersion: "1.0"
+home: https://iceberg.apache.org
+maintainers:
+  - name: Vijay Chhatbar
+    email: vijay@chhatbar.net

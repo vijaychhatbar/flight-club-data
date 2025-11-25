@@ -1,0 +1,8 @@
+apiVersion: v2
+name: infrastructure
+description: Kubernetes infrastructure (namespaces, RBAC)
+type: application
+version: 1.0.0
+maintainers:
+  - name: Vijay Chhatbar
+    email: vijay@chhatbar.net

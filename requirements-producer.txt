@@ -1,0 +1,4 @@
+requests==2.31.0
+confluent-kafka[avro,schema-registry]==2.3.0
+python-dotenv==1.0.0
+colorlog==6.8.0

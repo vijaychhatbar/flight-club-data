@@ -1,0 +1,133 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metabase
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: metabase
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: metabase
+  template:
+    metadata:
+      labels:
+        app: metabase
+    spec:
+      securityContext:
+        fsGroup: {{ .Values.securityContext.fsGroup }}
+        runAsUser: {{ .Values.securityContext.runAsUser }}
+        runAsGroup: {{ .Values.securityContext.runAsGroup }}
+        fsGroupChangePolicy: "OnRootMismatch"
+      
+      initContainers:
+      - name: fix-metabase-permissions
+        image: busybox:1.36
+        command: 
+        - sh
+        - -c
+        - |
+          echo "Setting up /metabase-data and /plugins directories"
+          mkdir -p /metabase-data /plugins
+          chmod -R 777 /metabase-data /plugins
+          echo "Permissions fixed successfully"
+        securityContext:
+          runAsUser: 0
+          runAsGroup: 0
+        volumeMounts:
+        - name: metabase-data
+          mountPath: /metabase-data
+        - name: metabase-plugins
+          mountPath: /plugins
+        - name: shared-data
+          mountPath: /data
+      
+      {{- if .Values.duckdbDriver.enabled }}
+      - name: install-duckdb-driver
+        image: busybox:1.36
+        command:
+        - sh
+        - -c
+        - |
+          echo "Checking for DuckDB driver..."
+          if [ ! -f /plugins/duckdb.metabase-driver.jar ]; then
+            echo "Downloading DuckDB driver..."
+            wget -q -O /plugins/duckdb.metabase-driver.jar https://github.com/AlexR2D2/metabase_duckdb_driver/releases/download/{{ .Values.duckdbDriver.version }}/duckdb.metabase-driver.jar
+            chmod 644 /plugins/duckdb.metabase-driver.jar
+            echo "DuckDB driver downloaded successfully"
+          else
+            echo "DuckDB driver already exists"
+          fi
+          ls -la /plugins/
+        securityContext:
+          runAsUser: 0
+          runAsGroup: 0
+        volumeMounts:
+        - name: metabase-plugins
+          mountPath: /plugins
+      {{- end }}
+      
+      containers:
+      - name: metabase
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - containerPort: 3000
+        env:
+        - name: MB_DB_TYPE
+          value: "h2"
+        - name: MB_DB_FILE
+          value: "/metabase-data/metabase.db"
+        - name: MB_PLUGINS_DIR
+          value: "/plugins"
+        volumeMounts:
+        - name: metabase-data
+          mountPath: /metabase-data
+        - name: metabase-plugins
+          mountPath: /plugins
+        - name: shared-data
+          mountPath: /data
+        {{- with .Values.resources }}
+        resources:
+          {{- toYaml . | nindent 12 }}
+        {{- end }}
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 120
+          periodSeconds: 30
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+      volumes:
+      - name: metabase-data
+        persistentVolumeClaim:
+          claimName: metabase-data
+      - name: metabase-plugins
+        persistentVolumeClaim:
+          claimName: metabase-plugins
+      - name: shared-data
+        hostPath:
+          path: /mnt/nvme/shared-data
+          type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: metabase
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    app: metabase
+  ports:
+  - port: 3000
+    targetPort: 3000
+    nodePort: 30400
+  type: NodePort

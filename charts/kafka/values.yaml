@@ -1,0 +1,33 @@
+replicaCount: 3
+
+image:
+  repository: confluentinc/cp-kafka
+  pullPolicy: IfNotPresent
+  tag: "7.5.0"
+
+brokerConfig:
+  KAFKA_PROCESS_ROLES: "broker,controller"
+  KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
+  KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+  KAFKA_LOG_DIRS: "/var/lib/kafka/data"
+  CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+  KAFKA_CONTROLLER_QUORUM_VOTERS: "0@kafka-0.kafka.kafka.svc.cluster.local:9093,1@kafka-1.kafka.kafka.svc.cluster.local:9093,2@kafka-2.kafka.kafka.svc.cluster.local:9093"
+  # Note: KAFKA_ADVERTISED_LISTENERS is set in the command script to allow dynamic POD_NAME expansion
+
+storage:
+  storageClass: local-nvme
+  size: 10Gi
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+  requests:
+    cpu: 1000m
+    memory: 1Gi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

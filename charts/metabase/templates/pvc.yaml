@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: metabase-data
+  namespace: {{ .Release.Namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.metabaseData.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.metabaseData.size }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: metabase-plugins
+  namespace: {{ .Release.Namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.metabasePlugins.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.metabasePlugins.size }}

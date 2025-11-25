@@ -1,0 +1,9 @@
+apiVersion: v2
+name: schema-registry
+description: Confluent Schema Registry chart
+type: application
+version: 1.0.0
+appVersion: "7.5.0"
+maintainers:
+  - name: Vijay Chhatbar
+    email: vijay@chhatbar.net

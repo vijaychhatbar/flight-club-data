@@ -1,0 +1,32 @@
+storageClass:
+  name: local-nvme
+  provisioner: kubernetes.io/no-provisioner
+  volumeBindingMode: WaitForFirstConsumer
+
+# Shared storage PV. I was using individual PVs earlier, but ran into issues with PVC binding.
+# So now each service directly mounts hostPath instead of going through PV/PVC.
+sharedStorage:
+  enabled: false
+  name: shared-data-pv
+  size: 50Gi
+  path: /mnt/nvme/shared-data
+  nodeAffinity: minikube
+
+# Individual PVs for Kafka brokers
+persistentVolumes:
+  - name: kafka-pv-0
+    size: 10Gi
+    path: /mnt/nvme/kafka-0
+    nodeAffinity: minikube
+  - name: kafka-pv-1
+    size: 10Gi
+    path: /mnt/nvme/kafka-1
+    nodeAffinity: minikube
+  - name: kafka-pv-2
+    size: 10Gi
+    path: /mnt/nvme/kafka-2
+    nodeAffinity: minikube
+  - name: dagster-postgres-pv
+    size: 5Gi
+    path: /mnt/nvme/dagster-postgres
+    nodeAffinity: minikube

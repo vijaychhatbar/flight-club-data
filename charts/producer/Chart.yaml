@@ -1,0 +1,10 @@
+apiVersion: v2
+name: opensky-producer
+description: OpenSky Network flight data producer for Kafka
+type: application
+version: 1.0.0
+appVersion: "1.0"
+home: https://opensky-network.org
+maintainers:
+  - name: Vijay Chhatbar
+    email: vijay@chhatbar.net
