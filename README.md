@@ -262,6 +262,14 @@ This will:
 6. Push branch: `git push origin feature-name`
 7. Create Pull Request
 
+## To do:
+
+- Create CI/CD pipeline to add linter + format checks.
+- Add unit test cases for consumer, producer, and dagster pipeline.
+- Add unit test cases to CI/CD pipeline.
+- Make code more modular by organizing files into respective folders.
+- Move dagster code out of DAG to modular structure by adding tasks to separate Python files. Maybe use dbt instead of SQL files directly.
+
 ## License
 
 This project is open-source and available under the MIT License.
