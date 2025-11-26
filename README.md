@@ -21,6 +21,10 @@ The pipeline follows this data flow:
 - **Kubernetes**: Container orchestration via Minikube
 - **Helm/Helmfile**: Kubernetes deployment management
 
+## Architecture Diagram
+
+![Architecture](Architecture.png)
+
 ## Dataset
 
 This pipeline processes real-time flight data from the **OpenSky Network**, a non-profit organization that provides free access to worldwide air traffic data. The dataset includes:
@@ -50,10 +54,16 @@ Each flight record contains:
 
 The dataset typically processes 8,000-15,000 active flights globally at any given time, with data retention policies configurable based on storage requirements.
 
+## Example Visualization
+
+This is what the visualization can look like
+
+![Metabase dashboard](Metabase.jpg)
+
 ## Project Structure
 
 ```
-flight-club-kafka/
+flight-club-data/
 ├── charts/                    # Helm charts for each service
 │   ├── kafka/                 # Kafka cluster with KRaft mode
 │   ├── schema-registry/       # Confluent Schema Registry
@@ -146,8 +156,8 @@ Since its a real-time processing pipeline, I would recommend this atleast:
 ### 1. Clone and Setup
 
 ```bash
-git clone https://github.com/your-username/flight-club-kafka.git
-cd flight-club-kafka
+git clone https://github.com/your-username/flight-club-data.git
+cd flight-club-data
 ```
 
 ### 2. Configure Environment
@@ -225,11 +235,7 @@ minikube service dagster-webserver -n dagster --url
 minikube service metabase -n dashboard --url
 ```
 
-## Example Visualization
 
-This is what the visualization can look like
-
-![Metabase dashboard](Metabase.jpg)
 
 
 ## Cleanup
