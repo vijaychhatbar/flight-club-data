@@ -2,3 +2,4 @@ namespaces:
   - kafka
   - dagster
   - dashboard
+  - monitoring

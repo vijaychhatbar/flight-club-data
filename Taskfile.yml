@@ -66,7 +66,7 @@ tasks:
         minikube start \
           --driver=docker \
           --cpus=4 \
-          --memory=8192 \
+          --memory=11000 \
           --disk-size=50g
     status:
       - minikube status | grep -q "Running"
@@ -208,8 +208,15 @@ tasks:
         echo "Forwarding Dagster on localhost:3000"
         kubectl port-forward -n dagster svc/dagster-webserver 3000:3000 &
 
+  port-forward-grafana:
+    desc: Port forward Grafana (localhost:3002)
+    cmds:
+      - |
+        echo "Forwarding Grafana on localhost:3002"
+        kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3002:80 --address 0.0.0.0 &
+
   port-forward-akhq:
-    desc: Port forward AKHQ Kafka UI (localhost:8080)
+    desc: Port forward AKHQ Kafka UI - because why not?
     cmds:
       - |
         echo "Forwarding AKHQ on localhost:8080"

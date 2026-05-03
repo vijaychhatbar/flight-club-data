@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 import requests
 from pydantic import BaseModel
+from prometheus_client import Counter, start_http_server
 from confluent_kafka import Producer
 from confluent_kafka.serialization import SerializationContext, MessageField
 from confluent_kafka.schema_registry import SchemaRegistryClient
@@ -28,6 +29,12 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# Prometheus metrics
+FLIGHTS_FETCHED   = Counter("producer_flights_fetched_total",    "Total flights fetched from OpenSky API")
+FLIGHTS_SENT      = Counter("producer_flights_sent_total",       "Total messages successfully sent to Kafka")
+VALIDATION_ERRORS = Counter("producer_validation_errors_total",  "Pydantic FlightState validation failures")
+KAFKA_ERRORS      = Counter("producer_kafka_errors_total",       "Kafka send failures")
 
 # Avro schema for flight data
 FLIGHT_SCHEMA = """
@@ -131,6 +138,7 @@ class OpenSkyProducer:
 
         self.stats = {"total_fetches": 0, "total_flights": 0, "total_sent": 0, "errors": 0}
 
+        start_http_server(8000)
         logger.info("OpenSky Producer initialized successfully with Schema Registry")
 
     def refresh_token(self):
@@ -188,6 +196,7 @@ class OpenSkyProducer:
             self.stats["total_fetches"] += 1
 
             if data and "states" in data and data["states"]:
+                FLIGHTS_FETCHED.inc(len(data["states"]))
                 logger.info(f"Fetched {len(data['states'])} flights from OpenSky API")
                 return data
             else:
@@ -235,8 +244,10 @@ class OpenSkyProducer:
         if err is not None:
             logger.error(f"Message delivery failed: {err}")
             self.stats["errors"] += 1
+            KAFKA_ERRORS.inc()
         else:
             self.stats["total_sent"] += 1
+            FLIGHTS_SENT.inc()
             if self.stats["total_sent"] % 1000 == 0:
                 logger.info(f"Delivered {self.stats['total_sent']} messages")
 
@@ -274,12 +285,14 @@ class OpenSkyProducer:
 
                     for state in data["states"]:
                         if state and state[0]:
+                            # Adding try-except around parsing individual state vectors to prevent one bad record from crashing the loop
                             try:
                                 flight = self.parse_flight_state(state, fetch_time)
                                 self.send_to_kafka(flight)
                             except Exception as e:
                                 logger.warning(f"Skipping invalid state vector {state[0]}: {e}")
                                 self.stats["errors"] += 1
+                                VALIDATION_ERRORS.inc()
 
                     self.producer.flush()
                     self.stats["total_flights"] += len(data["states"])

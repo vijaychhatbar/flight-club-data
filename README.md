@@ -22,6 +22,8 @@ The pipeline follows this data flow:
 - **Metabase**: Business intelligence and dashboard platform
 - **Kubernetes**: Container orchestration via Minikube (`--driver=docker` on WSL2)
 - **Helm/Helmfile**: Kubernetes deployment management
+- **Prometheus**: Metrics, logs and traces management
+- **Grafana**: Visualise metrics, logs and traces
 
 ## Architecture Diagram
 
@@ -108,6 +110,8 @@ flight-club-data/
 │   ├── metabase/
 │   ├── storage/               # PersistentVolumes
 │   └── infrastructure/        # Kubernetes namespaces
+│   └── akhq/                  # Visualisation for Kafka schema registry
+│   └── grafana-dashboards/    # Helm chart for Grafana.
 ├── Helmfile.yaml              # Multi-service deployment orchestration
 └── Taskfile.yml               # One-command deployment automation
 ```
@@ -229,6 +233,14 @@ task port-forward-dagster
 # Metabase
 task port-forward-metabase
 # Open http://localhost:3001
+
+# Grafana
+task port-forward-grafana
+# Open http://localhost:3002
+
+# AKHQ
+task port-forward-akhq
+# Open http://localhost:8080
 ```
 
 **WSL2 note**: the above tasks bind to `0.0.0.0` so the port is reachable from your Windows browser at `http://localhost:3000`. If you customised the tasks, make sure `kubectl port-forward` uses `--address 0.0.0.0`.
