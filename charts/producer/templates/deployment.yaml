@@ -12,10 +12,13 @@ spec:
       {{- include "opensky-producer.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.podAnnotations }}
       annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+        {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
       labels:
         {{- include "opensky-producer.selectorLabels" . | nindent 8 }}
     spec:
@@ -38,6 +41,9 @@ spec:
         ports:
         - name: http
           containerPort: 8080
+          protocol: TCP
+        - name: metrics
+          containerPort: 8000
           protocol: TCP
         envFrom:
         - configMapRef:

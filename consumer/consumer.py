@@ -12,6 +12,7 @@ import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
+from prometheus_client import Counter, Gauge, start_http_server
 from confluent_kafka import Consumer, KafkaError
 from confluent_kafka.serialization import SerializationContext, MessageField
 from confluent_kafka.schema_registry import SchemaRegistryClient
@@ -39,6 +40,14 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# Prometheus metrics
+MESSAGES_CONSUMED  = Counter("consumer_messages_consumed_total",  "Total Kafka messages consumed")
+RECORDS_WRITTEN    = Counter("consumer_records_written_total",    "Total records written to Iceberg")
+BATCHES_WRITTEN    = Counter("consumer_batches_written_total",    "Total batches written to Iceberg")
+VALIDATION_ERRORS  = Counter("consumer_validation_errors_total",  "Pydantic FlightRecord validation failures")
+ICEBERG_ERRORS     = Counter("consumer_iceberg_errors_total",     "Iceberg batch write failures")
+BUFFER_SIZE        = Gauge("consumer_buffer_size",                "Current in-memory record buffer size")
 
 
 class FlightRecord(BaseModel):
@@ -111,6 +120,7 @@ class IcebergConsumer:
 
         self.stats = {"total_consumed": 0, "total_written": 0, "batches_written": 0, "errors": 0}
 
+        start_http_server(8000)
         logger.info("Iceberg Consumer initialized successfully")
 
     def _init_catalog(self):
@@ -209,15 +219,19 @@ class IcebergConsumer:
 
             self.stats["total_written"] += len(unique_records)
             self.stats["batches_written"] += 1
+            RECORDS_WRITTEN.inc(len(unique_records))
+            BATCHES_WRITTEN.inc()
 
             logger.info(f"Successfully wrote {len(unique_records)} records to Iceberg")
 
             self.buffer.clear()
+            BUFFER_SIZE.set(0)
             self.last_write_time = time.time()
 
         except Exception as e:
             logger.error(f"Error writing batch to Iceberg: {e}", exc_info=True)
             self.stats["errors"] += 1
+            ICEBERG_ERRORS.inc()
 
     def should_write_batch(self) -> bool:
         """Check if we should write the current batch"""
@@ -255,6 +269,8 @@ class IcebergConsumer:
                     if raw:
                         self.buffer.append(FlightRecord(**raw))
                         self.stats["total_consumed"] += 1
+                        MESSAGES_CONSUMED.inc()
+                        BUFFER_SIZE.set(len(self.buffer))
 
                         if self.stats["total_consumed"] % 1000 == 0:
                             logger.info(
@@ -274,6 +290,7 @@ class IcebergConsumer:
                 except Exception as e:
                     logger.error(f"Error processing message: {e}", exc_info=True)
                     self.stats["errors"] += 1
+                    VALIDATION_ERRORS.inc()
 
         except KeyboardInterrupt:
             logger.info("Received interrupt signal, shutting down...")

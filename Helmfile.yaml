@@ -14,6 +14,8 @@ repositories:
     url: https://packages.confluent.io/helm
   - name: bitnami
     url: https://charts.bitnami.com/bitnami
+  - name: prometheus-community
+    url: https://prometheus-community.github.io/helm-charts
 
 # Global defaults
 commonLabels:
@@ -245,6 +247,76 @@ releases:
             requests:
               cpu: 250m
               memory: 512Mi
+
+  # MONITORING: Prometheus + Grafana.
+
+  - name: kube-prometheus-stack
+    namespace: monitoring
+    chart: prometheus-community/kube-prometheus-stack
+    version: "58.7.2"
+    needs:
+      - kube-system/namespaces
+    values:
+      - alertmanager:
+          enabled: false
+        grafana:
+          adminPassword: "admin"
+          sidecar:
+            dashboards:
+              enabled: true
+              searchNamespace: ALL
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+        prometheus:
+          prometheusSpec:
+            resources:
+              requests:
+                cpu: 200m
+                memory: 512Mi
+              limits:
+                cpu: 1000m
+                memory: 1Gi
+            additionalScrapeConfigs:
+              - job_name: kubernetes-pods
+                kubernetes_sd_configs:
+                  - role: pod
+                relabel_configs:
+                  - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+                    action: keep
+                    regex: "true"
+                  - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+                    action: replace
+                    target_label: __metrics_path__
+                    regex: (.+)
+                  - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+                    action: replace
+                    regex: ([^:]+)(?::\d+)?;(\d+)
+                    replacement: $1:$2
+                    target_label: __address__
+                  - action: labelmap
+                    regex: __meta_kubernetes_pod_label_(.+)
+                  - source_labels: [__meta_kubernetes_namespace]
+                    action: replace
+                    target_label: namespace
+                  - source_labels: [__meta_kubernetes_pod_name]
+                    action: replace
+                    target_label: pod
+        nodeExporter:
+          enabled: true
+        kubeStateMetrics:
+          enabled: true
+
+  - name: grafana-dashboards
+    namespace: monitoring
+    chart: ./charts/grafana-dashboards
+    version: 1.0.0
+    needs:
+      - monitoring/kube-prometheus-stack
 
   # KAFKA MANAGEMENT: AKHQ GUI.
 

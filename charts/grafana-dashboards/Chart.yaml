@@ -1,0 +1,5 @@
+apiVersion: v2
+name: grafana-dashboards
+description: Pre-built Grafana dashboards for the aviation pipeline
+type: application
+version: 1.0.0
