@@ -6,6 +6,7 @@ from ..resources.duckdb import DuckDBResource
 from ..resources.iceberg import IcebergResource
 from pydantic import BaseModel
 
+
 class RawFlightDataStats(BaseModel):
     total_records: int
     unique_aircraft: int
