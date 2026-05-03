@@ -1,0 +1,23 @@
+replicaCount: 1
+
+image:
+  repository: tchiotludo/akhq
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  port: 8080
+
+kafka:
+  bootstrapServers: "kafka-0.kafka.kafka.svc.cluster.local:9092"
+
+schemaRegistry:
+  url: "http://schema-registry-svc.kafka.svc.cluster.local:8081"
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi

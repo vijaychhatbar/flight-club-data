@@ -246,6 +246,29 @@ releases:
               cpu: 250m
               memory: 512Mi
 
+  # KAFKA MANAGEMENT: AKHQ GUI.
+
+  - name: akhq
+    namespace: kafka
+    chart: ./charts/akhq
+    version: 1.0.0
+    needs:
+      - kafka/kafka
+      - kafka/schema-registry
+    values:
+      - replicaCount: 1
+        kafka:
+          bootstrapServers: "kafka-0.kafka.kafka.svc.cluster.local:9092"
+        schemaRegistry:
+          url: "http://schema-registry-svc.kafka.svc.cluster.local:8081"
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+
   # VISUALIZATION: Metabase Dashboard.
 
   - name: metabase

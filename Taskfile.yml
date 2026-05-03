@@ -208,6 +208,13 @@ tasks:
         echo "Forwarding Dagster on localhost:3000"
         kubectl port-forward -n dagster svc/dagster-webserver 3000:3000 &
 
+  port-forward-akhq:
+    desc: Port forward AKHQ Kafka UI (localhost:8080)
+    cmds:
+      - |
+        echo "Forwarding AKHQ on localhost:8080"
+        kubectl port-forward -n kafka svc/akhq 8080:8080 --address 0.0.0.0 &
+
   port-forward-metabase:
     desc: Port forward Metabase (localhost:3001)
     cmds:

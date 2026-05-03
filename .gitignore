@@ -62,3 +62,4 @@ data/
 # Keep requirements files
 !requirements*.txt
 installs/
+CODEBASE.md
