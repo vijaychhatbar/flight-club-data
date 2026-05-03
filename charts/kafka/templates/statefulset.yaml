@@ -54,6 +54,17 @@ spec:
               fi
 
               exec /etc/confluent/docker/run
+          # Added readiness probe to ensure Kafka is fully ready before accepting traffic
+          readinessProbe:
+            exec:
+              command:
+                - bash
+                - -c
+                - "kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1"
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 6
+            timeoutSeconds: 10
           volumeMounts:
             - name: data
               mountPath: /var/lib/kafka/data

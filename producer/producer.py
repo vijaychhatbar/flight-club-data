@@ -11,6 +11,7 @@ import sys
 from datetime import datetime
 from typing import Optional, Dict, Any
 import requests
+from pydantic import BaseModel
 from confluent_kafka import Producer
 from confluent_kafka.serialization import SerializationContext, MessageField
 from confluent_kafka.schema_registry import SchemaRegistryClient
@@ -56,6 +57,27 @@ FLIGHT_SCHEMA = """
     ]
 }
 """
+
+
+class FlightState(BaseModel):
+    icao24: str
+    callsign: Optional[str] = None
+    origin_country: Optional[str] = None
+    time_position: Optional[int] = None
+    last_contact: Optional[int] = None
+    longitude: Optional[float] = None
+    latitude: Optional[float] = None
+    baro_altitude: Optional[float] = None
+    on_ground: Optional[bool] = None
+    velocity: Optional[float] = None
+    true_track: Optional[float] = None
+    vertical_rate: Optional[float] = None
+    geo_altitude: Optional[float] = None
+    squawk: Optional[str] = None
+    spi: Optional[bool] = None
+    position_source: Optional[int] = None
+    fetch_timestamp: Optional[int] = None
+    ingestion_time: str
 
 
 class OpenSkyProducer:
@@ -177,9 +199,9 @@ class OpenSkyProducer:
             self.stats["errors"] += 1
             return None
 
-    def parse_flight_state(self, state: list, fetch_time: int) -> Dict[str, Any]:
+    def parse_flight_state(self, state: list, fetch_time: int) -> FlightState:
         """
-        Parse OpenSky flight state vector into structured format. These are the defined fields:
+        Parse OpenSky flight state vector into structured format.
 
         State vector indices:
         0: icao24, 1: callsign, 2: origin_country, 3: time_position,
@@ -187,28 +209,27 @@ class OpenSkyProducer:
         8: on_ground, 9: velocity, 10: true_track, 11: vertical_rate,
         12: sensors, 13: geo_altitude, 14: squawk, 15: spi, 16: position_source
         """
-        return {
-            "icao24": state[0] if state[0] else "unknown",
-            "callsign": state[1].strip() if state[1] else None,
-            "origin_country": state[2] if state[2] else None,
-            "time_position": int(state[3]) if state[3] is not None else None,
-            "last_contact": int(state[4]) if state[4] is not None else None,
-            "longitude": float(state[5]) if state[5] is not None else None,
-            "latitude": float(state[6]) if state[6] is not None else None,
-            "baro_altitude": float(state[7]) if state[7] is not None else None,
-            "on_ground": bool(state[8]) if state[8] is not None else None,
-            "velocity": float(state[9]) if state[9] is not None else None,
-            "true_track": float(state[10]) if state[10] is not None else None,
-            "vertical_rate": float(state[11]) if state[11] is not None else None,
-            "geo_altitude": float(state[13]) if state[13] is not None else None,
-            "squawk": state[14] if state[14] else None,
-            "spi": bool(state[15]) if state[15] is not None else None,
-            "position_source": int(state[16]) if state[16] is not None else None,
-            "fetch_timestamp": int(fetch_time) if fetch_time else None,
-            "ingestion_time": datetime.utcnow().isoformat(),
-        }
+        return FlightState(
+            icao24=state[0] if state[0] else "unknown",
+            callsign=state[1].strip() if state[1] else None,
+            origin_country=state[2] if state[2] else None,
+            time_position=int(state[3]) if state[3] is not None else None,
+            last_contact=int(state[4]) if state[4] is not None else None,
+            longitude=float(state[5]) if state[5] is not None else None,
+            latitude=float(state[6]) if state[6] is not None else None,
+            baro_altitude=float(state[7]) if state[7] is not None else None,
+            on_ground=bool(state[8]) if state[8] is not None else None,
+            velocity=float(state[9]) if state[9] is not None else None,
+            true_track=float(state[10]) if state[10] is not None else None,
+            vertical_rate=float(state[11]) if state[11] is not None else None,
+            geo_altitude=float(state[13]) if state[13] is not None else None,
+            squawk=state[14] if state[14] else None,
+            spi=bool(state[15]) if state[15] is not None else None,
+            position_source=int(state[16]) if state[16] is not None else None,
+            fetch_timestamp=int(fetch_time) if fetch_time else None,
+            ingestion_time=datetime.utcnow().isoformat(),
+        )
 
-    # Callback for delivery reports. This will be called once for each message produced to indicate delivery result.
     def delivery_report(self, err, msg):
         """Callback for message delivery reports"""
         if err is not None:
@@ -219,25 +240,17 @@ class OpenSkyProducer:
             if self.stats["total_sent"] % 1000 == 0:
                 logger.info(f"Delivered {self.stats['total_sent']} messages")
 
-    # Send flight data to Kafka topic.
-    def send_to_kafka(self, flight: Dict[str, Any]) -> bool:
+    def send_to_kafka(self, flight: FlightState) -> bool:
         """Send flight data to Kafka topic with Avro serialization"""
         try:
-            # Use icao24 as key for partitioning.
-            key = flight["icao24"].encode("utf-8")
-
-            # Serialize value with Avro
+            flight_dict = flight.model_dump()
+            key = flight_dict["icao24"].encode("utf-8")
             serialization_context = SerializationContext(self.topic, MessageField.VALUE)
-            serialized_value = self.avro_serializer(flight, serialization_context)
-
-            # Send to Kafka
+            serialized_value = self.avro_serializer(flight_dict, serialization_context)
             self.producer.produce(
                 topic=self.topic, key=key, value=serialized_value, on_delivery=self.delivery_report
             )
-
-            # Poll for callbacks (non-blocking). This allows delivery reports to be processed.
             self.producer.poll(0)
-
             return True
 
         except Exception as e:
@@ -249,31 +262,25 @@ class OpenSkyProducer:
         """Main producer loop"""
         logger.info(f"Starting OpenSky producer - fetching every {self.fetch_interval} seconds")
         logger.info(f"Publishing to topic: {self.topic}")
-        logger.info("Using Avro schema with Schema Registry")
 
         try:
             while True:
                 start_time = time.time()
 
-                # Fetch data from OpenSky API
                 data = self.fetch_flight_data()
 
                 if data and "states" in data and data["states"]:
                     fetch_time = data.get("time", int(time.time()))
 
-                    # Process each flight
                     for state in data["states"]:
-                        if state and state[0]:  # Skip if no icao24
+                        if state and state[0]:
                             flight = self.parse_flight_state(state, fetch_time)
                             self.send_to_kafka(flight)
 
-                    # Flush to ensure all messages are sent
                     self.producer.flush()
-
                     self.stats["total_flights"] += len(data["states"])
                     logger.info(f"Processed {len(data['states'])} flights")
 
-                # Print stats periodically
                 if self.stats["total_fetches"] % 10 == 0:
                     logger.info(
                         f"Stats: Fetches={self.stats['total_fetches']}, "
@@ -282,12 +289,9 @@ class OpenSkyProducer:
                         f"Errors={self.stats['errors']}"
                     )
 
-                # Calculate sleep time to maintain interval
                 elapsed = time.time() - start_time
                 sleep_time = max(0, self.fetch_interval - elapsed)
-
                 if sleep_time > 0:
-                    logger.debug(f"Sleeping for {sleep_time:.2f} seconds")
                     time.sleep(sleep_time)
                 else:
                     logger.warning(f"Processing took longer than interval: {elapsed:.2f}s")
@@ -308,7 +312,6 @@ class OpenSkyProducer:
 
 
 def main():
-    """Main entry point"""
     try:
         producer = OpenSkyProducer()
         producer.run()

@@ -49,7 +49,7 @@ spec:
           claimName: dagster-home
       - name: shared-data
         hostPath:
-          path: /mnt/nvme/shared-data
+          path: /data/shared-data
           type: Directory
 ---
 apiVersion: v1

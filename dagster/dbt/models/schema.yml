@@ -1,0 +1,47 @@
+version: 2
+
+models:
+  - name: stg_flights
+    description: >
+      Deduplicated flight state vectors enriched with altitude_category,
+      speed_category, and parsed timestamp columns. Rows with missing or
+      out-of-range coordinates are excluded.
+    columns:
+      - name: icao24
+        description: ICAO 24-bit transponder address
+        tests: [not_null]
+      - name: latitude
+        tests: [not_null]
+      - name: longitude
+        tests: [not_null]
+      - name: altitude_category
+        tests:
+          - accepted_values:
+              values: ['Ground', 'Low', 'Medium', 'High']
+      - name: speed_category
+        tests:
+          - accepted_values:
+              values: ['Slow', 'Medium', 'Fast', null]
+
+  - name: country_stats
+    description: Per-country aggregation of observations, unique aircraft, altitude and velocity.
+    columns:
+      - name: origin_country
+        tests: [not_null, unique]
+
+  - name: hourly_activity
+    description: Hourly bucket aggregation of flight counts across all aircraft.
+    columns:
+      - name: fetch_hour
+        tests: [not_null, unique]
+
+  - name: aircraft_stats
+    description: Per-aircraft lifetime statistics including altitude and velocity extremes.
+    columns:
+      - name: icao24
+        tests: [not_null]
+
+  - name: flight_density_grid
+    description: >
+      1-degree lat/lon grid cells with flight counts for airborne traffic.
+      Cells with fewer than 5 observations are excluded.

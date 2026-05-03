@@ -2,7 +2,6 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies for confluent-kafka (librdkafka)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     gcc \
@@ -14,8 +13,8 @@ RUN apt-get update && \
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-COPY requirements-producer.txt .
-RUN uv pip install --system -r requirements-producer.txt
+COPY requirements.txt .
+RUN uv pip install --system -r requirements.txt
 
 COPY producer.py .
 
@@ -24,9 +23,7 @@ RUN useradd -m -u 1000 appuser && \
 
 USER appuser
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD pgrep -f producer.py || exit 1
 
-# Entry point
-  CMD ["python", "-u", "producer.py"]
+CMD ["python", "-u", "producer.py"]

@@ -1,14 +1,10 @@
-# Since duckdb native library is not available for arm64 yet, we use amd64 image and build duckdb driver separately
 FROM eclipse-temurin:21-jre-jammy
 
-# Build arguments for versions
 ARG METABASE_VERSION=0.48.0
 ARG METABASE_DUCKDB_DRIVER_VERSION=0.2.4
 
-# Create metabase user and group first
 RUN groupadd -r metabase && useradd -r -g metabase metabase
 
-# Install required dependencies
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     wget \
@@ -19,10 +15,8 @@ RUN mkdir -p /app && \
 
 WORKDIR /app
 
-# Download Metabase JAR. This is the main Metabase application.
 ADD https://downloads.metabase.com/v${METABASE_VERSION}/metabase.jar /app/metabase.jar
 
-# Fix ownership after downloading. Again faced issues with some Docker versions.
 RUN chown metabase:metabase /app/metabase.jar && \
     chmod 755 /app/metabase.jar
 
@@ -32,5 +26,4 @@ EXPOSE 3000
 
 USER metabase
 
-# Entry point
 CMD ["java", "-jar", "/app/metabase.jar"]

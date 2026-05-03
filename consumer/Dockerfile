@@ -2,7 +2,6 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     gcc \
@@ -13,8 +12,8 @@ RUN apt-get update && \
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-COPY requirements-consumer.txt .
-RUN uv pip install --system -r requirements-consumer.txt
+COPY requirements.txt .
+RUN uv pip install --system -r requirements.txt
 
 COPY consumer.py .
 
@@ -25,9 +24,7 @@ RUN mkdir -p /data && chown -R appuser:appuser /data
 
 USER appuser
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD pgrep -f consumer.py || exit 1
 
-# Entry point
 CMD ["python", "-u", "consumer.py"]

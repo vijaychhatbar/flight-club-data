@@ -1,4 +1,4 @@
-replicaCount: 3
+replicaCount: 1
 
 image:
   repository: confluentinc/cp-kafka
@@ -11,7 +11,7 @@ brokerConfig:
   KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
   KAFKA_LOG_DIRS: "/var/lib/kafka/data"
   CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
-  KAFKA_CONTROLLER_QUORUM_VOTERS: "0@kafka-0.kafka.kafka.svc.cluster.local:9093,1@kafka-1.kafka.kafka.svc.cluster.local:9093,2@kafka-2.kafka.kafka.svc.cluster.local:9093"
+  KAFKA_CONTROLLER_QUORUM_VOTERS: "0@kafka-0.kafka.kafka.svc.cluster.local:9093"
   # Note: KAFKA_ADVERTISED_LISTENERS is set in the command script to allow dynamic POD_NAME expansion
 
 storage:

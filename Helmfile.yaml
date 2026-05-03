@@ -44,31 +44,23 @@ releases:
         persistentVolumes:
           - name: kafka-pv-0
             size: 10Gi
-            path: /mnt/nvme/kafka-0
-            nodeAffinity: minikube
-          - name: kafka-pv-1
-            size: 10Gi
-            path: /mnt/nvme/kafka-1
-            nodeAffinity: minikube
-          - name: kafka-pv-2
-            size: 10Gi
-            path: /mnt/nvme/kafka-2
+            path: /data/kafka-0
             nodeAffinity: minikube
           - name: metabase-pv
             size: 5Gi
-            path: /mnt/nvme/metabase
+            path: /data/metabase
             nodeAffinity: minikube
           - name: metabase-plugins-pv
             size: 2Gi
-            path: /mnt/nvme/metabase-plugins
+            path: /data/metabase-plugins
             nodeAffinity: minikube
           - name: dagster-home-pv
             size: 10Gi
-            path: /mnt/nvme/dagster-home
+            path: /data/dagster-home
             nodeAffinity: minikube
           - name: dagster-postgres-pv
             size: 5Gi
-            path: /mnt/nvme/dagster-postgres
+            path: /data/dagster-postgres
             nodeAffinity: minikube
 
   # DATA STREAMING: Kafka & Schema Registry.
@@ -79,7 +71,7 @@ releases:
     needs:
       - kube-system/storage
     values:
-      - replicaCount: 3
+      - replicaCount: 1
         image:
           repository: confluentinc/cp-kafka
           tag: "7.5.0"
@@ -89,16 +81,22 @@ releases:
           KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
           KAFKA_LOG_DIRS: "/var/lib/kafka/data"
           CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+          KAFKA_CONTROLLER_QUORUM_VOTERS: "0@kafka-0.kafka.kafka.svc.cluster.local:9093"
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+          KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+          KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+          KAFKA_DEFAULT_REPLICATION_FACTOR: "1"
+          KAFKA_MIN_INSYNC_REPLICAS: "1"
         storage:
           storageClass: local-nvme
           size: 10Gi
         resources:
           limits:
-            cpu: 2000m
-            memory: 2Gi
-          requests:
             cpu: 1000m
             memory: 1Gi
+          requests:
+            cpu: 250m
+            memory: 512Mi
 
   - name: schema-registry
     namespace: kafka
@@ -111,13 +109,13 @@ releases:
         image:
           repository: confluentinc/cp-schema-registry
           tag: "7.5.0"
-        kafkaBootstrapServers: "kafka-0.kafka.kafka.svc.cluster.local:9092,kafka-1.kafka.kafka.svc.cluster.local:9092,kafka-2.kafka.kafka.svc.cluster.local:9092"
+        kafkaBootstrapServers: "kafka-0.kafka.kafka.svc.cluster.local:9092"
         resources:
           limits:
             cpu: 1000m
             memory: 1Gi
           requests:
-            cpu: 500m
+            cpu: 250m
             memory: 512Mi
 
   # PIPELINE: Producer & Consumer.
@@ -140,10 +138,10 @@ releases:
             cpu: 2000m
             memory: 2Gi
           requests:
-            cpu: 500m
-            memory: 1Gi
+            cpu: 250m
+            memory: 512Mi
         config:
-          KAFKA_BOOTSTRAP_SERVERS: "kafka-0.kafka.kafka.svc.cluster.local:9092,kafka-1.kafka.kafka.svc.cluster.local:9092,kafka-2.kafka.kafka.svc.cluster.local:9092"
+          KAFKA_BOOTSTRAP_SERVERS: "kafka-0.kafka.kafka.svc.cluster.local:9092"
           KAFKA_TOPIC: "flight-data"
           SCHEMA_REGISTRY_URL: "http://schema-registry-svc:8081"
           OPENSKY_API_URL: "https://opensky-network.org/api/states/all"
@@ -172,10 +170,10 @@ releases:
             cpu: 2000m
             memory: 2Gi
           requests:
-            cpu: 500m
-            memory: 1Gi
+            cpu: 250m
+            memory: 512Mi
         config:
-          KAFKA_BOOTSTRAP_SERVERS: "kafka-0.kafka.kafka.svc.cluster.local:9092,kafka-1.kafka.kafka.svc.cluster.local:9092,kafka-2.kafka.kafka.svc.cluster.local:9092"
+          KAFKA_BOOTSTRAP_SERVERS: "kafka-0.kafka.kafka.svc.cluster.local:9092"
           KAFKA_TOPIC: "flight-data"
           SCHEMA_REGISTRY_URL: "http://schema-registry-svc:8081"
           CONSUMER_GROUP_ID: "iceberg-consumer-group"
@@ -223,6 +221,7 @@ releases:
           ICEBERG_CATALOG_PATH: "/data/shared/iceberg-warehouse"
           ICEBERG_NAMESPACE: "aviation"
           DUCKDB_PATH: "/data/shared/analytics/aviation.duckdb"
+          DBT_PROFILES_DIR: "/opt/dagster/app/dbt"
           LOG_LEVEL: "INFO"
         resources:
           daemon:
@@ -230,22 +229,22 @@ releases:
               cpu: 1000m
               memory: 1Gi
             requests:
-              cpu: 250m
-              memory: 512Mi
+              cpu: 100m
+              memory: 256Mi
           webserver:
             limits:
               cpu: 1000m
               memory: 1Gi
             requests:
-              cpu: 250m
-              memory: 512Mi
+              cpu: 100m
+              memory: 256Mi
           codeServer:
             limits:
               cpu: 2000m
               memory: 2Gi
             requests:
-              cpu: 500m
-              memory: 1Gi
+              cpu: 250m
+              memory: 512Mi
 
   # VISUALIZATION: Metabase Dashboard.
 
@@ -276,8 +275,8 @@ releases:
             cpu: 2000m
             memory: 2Gi
           requests:
-            cpu: 500m
-            memory: 1Gi
+            cpu: 250m
+            memory: 512Mi
         securityContext:
           fsGroup: 2000
           runAsUser: 2000
