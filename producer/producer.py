@@ -274,8 +274,12 @@ class OpenSkyProducer:
 
                     for state in data["states"]:
                         if state and state[0]:
-                            flight = self.parse_flight_state(state, fetch_time)
-                            self.send_to_kafka(flight)
+                            try:
+                                flight = self.parse_flight_state(state, fetch_time)
+                                self.send_to_kafka(flight)
+                            except Exception as e:
+                                logger.warning(f"Skipping invalid state vector {state[0]}: {e}")
+                                self.stats["errors"] += 1
 
                     self.producer.flush()
                     self.stats["total_flights"] += len(data["states"])
