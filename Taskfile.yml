@@ -2,8 +2,8 @@ version: '3'
 
 vars:
   NAMESPACE: kafka
-  NVME_PATH: /mnt/nvme
-  KAFKA_REPLICAS: 3
+  NVME_PATH: /data
+  KAFKA_REPLICAS: 1
   KAFKA_VERSION: 7.5.0
   HELMFILE: ./Helmfile.yaml
   PRODUCER_IMAGE: opensky-producer:latest
@@ -60,32 +60,29 @@ tasks:
 
   # INFRASTRUCTURE SETUP
   start-minikube:
-    desc: Start Minikube with NVME mount
+    desc: Start Minikube with Docker driver (run from WSL2)
     cmds:
       - |
         minikube start \
+          --driver=docker \
           --cpus=4 \
-          --memory=24576 \
-          --disk-size=100g \
-          --mount \
-          --mount-string="{{.NVME_PATH}}:{{.NVME_PATH}}"
+          --memory=8192 \
+          --disk-size=50g
     status:
       - minikube status | grep -q "Running"
 
   prepare-nvme:
-    desc: Create and prepare NVME directories
+    desc: Create data directories inside Minikube node
     cmds:
       - |
         minikube ssh "sudo mkdir -p \
           {{.NVME_PATH}}/kafka-0 \
-          {{.NVME_PATH}}/kafka-1 \
-          {{.NVME_PATH}}/kafka-2 \
           {{.NVME_PATH}}/shared-data \
           {{.NVME_PATH}}/metabase \
           {{.NVME_PATH}}/metabase-plugins \
           {{.NVME_PATH}}/dagster-home \
           {{.NVME_PATH}}/dagster-postgres && \
-          sudo chmod -R 777 {{.NVME_PATH}}/{kafka-*,shared-data,metabase*,dagster*}"
+          sudo chmod -R 777 {{.NVME_PATH}}"
 
   # HELMFILE DEPLOYMENT
   helmfile-sync:
@@ -130,28 +127,28 @@ tasks:
     cmds:
       - |
         eval $(minikube docker-env)
-        docker build -t {{.PRODUCER_IMAGE}} -f Dockerfile.producer . --no-cache
+        docker build -t {{.PRODUCER_IMAGE}} producer/ --no-cache
 
   build-consumer:
     desc: Build consumer Docker image
     cmds:
       - |
         eval $(minikube docker-env)
-        docker build -t {{.CONSUMER_IMAGE}} -f Dockerfile.consumer . --no-cache
+        docker build -t {{.CONSUMER_IMAGE}} consumer/ --no-cache
 
   build-dagster:
     desc: Build Dagster Docker image
     cmds:
       - |
         eval $(minikube docker-env)
-        docker build -t {{.DAGSTER_IMAGE}} -f Dockerfile.dagster . --no-cache
+        docker build -t {{.DAGSTER_IMAGE}} dagster/ --no-cache
 
   build-metabase:
     desc: Build Metabase Docker image
     cmds:
       - |
         eval $(minikube docker-env)
-        docker build -t {{.METABASE_IMAGE}} -f Dockerfile.metabase . --no-cache
+        docker build -t {{.METABASE_IMAGE}} metabase/ --no-cache
 
   # STATUS
   status:

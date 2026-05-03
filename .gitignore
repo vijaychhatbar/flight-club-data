@@ -61,3 +61,4 @@ data/
 
 # Keep requirements files
 !requirements*.txt
+installs/

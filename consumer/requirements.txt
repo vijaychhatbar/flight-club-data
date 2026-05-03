@@ -1,4 +1,5 @@
 confluent-kafka[avro,schema-registry]==2.3.0
+pydantic>=2.0,<3.0
 pyiceberg[duckdb,sql-sqlite]==0.6.1
 pyarrow==14.0.1
 duckdb==0.9.2

@@ -1,0 +1,8 @@
+aviation:
+  target: prod
+  outputs:
+    prod:
+      type: duckdb
+      # Falls back to :memory: at Docker build time so dbt parse works without a real DB
+      path: "{{ env_var('DUCKDB_PATH', ':memory:') }}"
+      threads: 4

@@ -1,0 +1,15 @@
+version: 2
+
+sources:
+  - name: aviation
+    schema: main
+    tables:
+      - name: raw_flight_data
+        description: >
+          Raw flight state vectors staged from Apache Iceberg by the
+          raw_flight_data Dagster asset. Each row is one OpenSky state vector.
+        columns:
+          - name: icao24
+            description: ICAO 24-bit transponder address (hex)
+          - name: fetch_timestamp
+            description: Unix timestamp of the API fetch that produced this record

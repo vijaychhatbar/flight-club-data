@@ -1,6 +1,5 @@
 FROM python:3.11-slim
 
-# Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
@@ -12,22 +11,20 @@ WORKDIR /opt/dagster/app
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-COPY requirements-dagster.txt .
-RUN uv pip install --system -r requirements-dagster.txt
+COPY requirements.txt .
+RUN uv pip install --system -r requirements.txt
 
 RUN mkdir -p /opt/dagster/dagster_home
 
-# Copy Dagster configuration files
 COPY config/dagster.yaml /opt/dagster/dagster_home/dagster.yaml
 COPY workspace.yaml /opt/dagster/dagster_home/workspace.yaml
-
-COPY aviation_pipeline.py /opt/dagster/app/aviation_pipeline.py
+COPY aviation_pipeline/ /opt/dagster/app/aviation_pipeline/
+COPY dbt/ /opt/dagster/app/dbt/
+RUN cd /opt/dagster/app/dbt && dbt parse --profiles-dir .
 
 ENV DAGSTER_HOME=/opt/dagster/dagster_home
 ENV PYTHONUNBUFFERED=1
 
-# Expose ports
 EXPOSE 3000 4000
 
-# Entry point
 CMD ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000"]
